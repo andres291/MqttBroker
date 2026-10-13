@@ -6,6 +6,7 @@
 
 WiFiRecoveryManager wifiMgr;
 WebServer server(80);
+bool serverStarted = false;
 
 
 const char* MQTT_CLIENT_USER = "user"; // username for mqtt clients. Set your own value here.
@@ -29,7 +30,7 @@ public:
             };
             break;
         case LostConnect_sMQTTEventType:
-            WiFi.reconnect();
+            // WiFiRecoveryManager owns connection retries.
             break;
         case UnSubscribe_sMQTTEventType:
         case Subscribe_sMQTTEventType:
@@ -59,8 +60,11 @@ void setup()
     }
     
     // Webserver starten
-    server.begin();
-    Serial.println("Webserver gestartet");
+    if (wifiMgr.isConnected()) {
+      server.begin();
+      serverStarted = true;
+      Serial.println("Webserver gestartet");
+    }
  
     ElegantOTA.begin(&server);  // OTA aktivieren
     ElegantOTA.setAutoReboot(true);
@@ -74,6 +78,28 @@ void setup()
 };
 void loop()
 {
+    // Release port 80 before the recovery manager starts its setup portal.
+    if (!wifiMgr.isConnected() && serverStarted) {
+      server.stop();
+      serverStarted = false;
+      Serial.println("WiFi disconnected; webserver stopped");
+    }
+    wifiMgr.loop();
+    if (wifiMgr.isConnected() && !serverStarted) {
+      broker.restart();
+      server.begin();
+      serverStarted = true;
+      Serial.println("WiFi connected; MQTT listener and webserver started");
+    }
+
+    static bool lastApMode = false;
+    bool apMode = wifiMgr.isInAPMode();
+    if (apMode != lastApMode) {
+      lastApMode = apMode;
+      Serial.println(apMode ? "WiFi setup AP opened; connection retries continue"
+                            : "WiFi setup AP closed");
+    }
+
     broker.update();
     // your magic code
     if(millis()-Time>1000)
@@ -88,6 +114,5 @@ void loop()
     }
 
     server.handleClient();
-    wifiMgr.loop();
     ElegantOTA.loop();
 };
