@@ -3,10 +3,11 @@
 bool sMQTTBroker::init(unsigned short port, bool checkWifiConnection)
 {
 	isCheckWifiConnection=checkWifiConnection;
-	_server = new TCPServer(port);
+	if (!_server) _server = new TCPServer(port, 8);
 	if (_server == 0)
 		return false;
 	_server->begin();
+	if (!static_cast<bool>(*_server)) { _server->end(); return false; }
 	return true;
 };
 void sMQTTBroker::update()
@@ -22,45 +23,41 @@ void sMQTTBroker::update()
 		}
 	}
 	TCPClient client = _server->available();
-	if (client)
+	if (client && clients.size() >= maxClients) {
+        ++rejectedClients;
+        client.stop();
+    } else if (client)
 	{
 		SMQTT_LOGD("New Client");
 		sMQTTClient *sClient = new sMQTTClient(this, client);
 		clients.push_back(sClient);
 	}
 #endif
-	sMQTTClientList::iterator clit;
-	for (clit = clients.begin(); clit != clients.end(); clit++)
-	{
-		sMQTTClient *c = *clit;
-		if (c->isConnected())
-			c->update();
-		else
-		{
-			sMQTTRemoveClientEvent event(c);
-			onEvent(&event);
-
-			for (sMQTTTopicList::iterator sub = subscribes.begin(); sub != subscribes.end(); sub++)
-			{
-				if ((*sub)->unsubscribe(c) == true)
-				{
-					delete *sub;
-					sub= subscribes.erase(sub);
-					if (sub == subscribes.end())
-						break;
-					sub--;
-				}
-			}
-
-			delete c;
-			clit=clients.erase(clit);
-			SMQTT_LOGD("Clients %d", clients.size());
-			if (clit == clients.end())
-				break;
-			clit--;
-		}
-	}
+    for (auto clit = clients.begin(); clit != clients.end();) {
+        auto *client = *clit;
+        if (client->isConnected()) client->update();
+        if (client->isConnected()) { ++clit; continue; }
+        sMQTTRemoveClientEvent event(client);
+        onEvent(&event);
+        for (auto sub = subscribes.begin(); sub != subscribes.end();) {
+            if ((*sub)->unsubscribe(client)) {
+                delete *sub;
+                sub = subscribes.erase(sub);
+            } else ++sub;
+        }
+        delete client;
+        clit = clients.erase(clit);
+    }
 };
+void sMQTTBroker::shutdown() {
+    if (_server) _server->end();
+    for (auto *topic : subscribes) delete topic;
+    subscribes.clear();
+    for (auto *client : clients) delete client;
+    clients.clear();
+    // Retained topics survive a WiFi reconnect, but not a reboot.
+}
+
 bool sMQTTBroker::subscribe(sMQTTClient *client, const char *topic)
 {
 	if (isTopicValidName(topic) == false)

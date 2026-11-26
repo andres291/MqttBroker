@@ -16,6 +16,7 @@ void sMQTTClient::update()
 	while (_client.available()>0)
 	{
 		message.incoming(_client.read());
+        if (message.hasError()) { _client.stop(); return; }
 		if (message.type())
 		{
 			processMessage();
@@ -27,7 +28,7 @@ void sMQTTClient::update()
 #if defined(ESP8266) || defined(ESP32)
 	currentMillis = millis();
 #endif
-	if (keepAlive != 0 && aliveMillis < currentMillis)
+	if (keepAlive != 0 && static_cast<int32_t>(currentMillis - aliveMillis) >= 0)
 	{
 		SMQTT_LOGD("aliveMillis(%lu) < currentMillis(%lu)", aliveMillis, currentMillis);
 		_client.stop();
@@ -45,6 +46,10 @@ void sMQTTClient::write(const char* buf, size_t length)
 }
 void sMQTTClient::processMessage()
 {
+    if (!mqtt_connected && message.type() != sMQTTMessage::Type::Connect) {
+        _client.stop(); return;
+    }
+
 	if (message.type() <= sMQTTMessage::Type::Disconnect)
 	{
 		SMQTT_LOGD("message type:%s(0x%x)", debugMessageType[message.type() / 0x10], message.type());
@@ -110,7 +115,7 @@ void sMQTTClient::processMessage()
 				{
 					message.getString(payload, len);
 					password = std::string(payload, len);
-					SMQTT_LOGD("message password:%s", password.c_str());
+					// Passwords are deliberately not logged.
 					payload += len;
 				}
 

@@ -25,6 +25,7 @@ public:
 	~sMQTTClient();
 
 	void update();
+	bool isAuthenticated() const { return mqtt_connected; }
 	
 	//! check connection
 	bool isConnected();

@@ -85,6 +85,7 @@ public:
 	const char* end() const { return &buffer[0] + buffer.size(); }
 	const char* getVHeader() const { return &buffer[vheader]; }
 	void reset();
+	bool hasError() const { return state == Error; }
 	Type type() const
 	{
 		return state == Complete ? static_cast<Type>(buffer[0] & 0XF0) : Unknown;

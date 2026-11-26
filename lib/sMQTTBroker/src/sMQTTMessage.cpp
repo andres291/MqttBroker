@@ -33,8 +33,12 @@ void sMQTTMessage::incoming(char in_byte)
 		break;
 	case Length:
 		{
+            if (buffer.size() > 5) { state = Error; return; }
 			unsigned char encoded = in_byte & 0x7f;
 			size += encoded*multiplyer;
+            if (size > 8192 || (buffer.size() == 5 && (in_byte & 0x80))) {
+                state = Error; return;
+            }
 			multiplyer *= 0x80;
 			if ((in_byte & 0x80) == 0)
 			{

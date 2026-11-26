@@ -14,6 +14,15 @@ class sMQTTBroker
 public:
 	/*! setup broker \param port set listen port \param checkWifiConnection enable/disable notify wifi connection in onEvent*/
 	bool init(unsigned short port, bool checkWifiConnection=false);
+	void setMaxClients(size_t limit) { maxClients = limit; }
+    size_t getClientCount() const { return clients.size(); }
+    size_t getConnectedClientCount() {
+        size_t count = 0;
+        for (auto *client : clients) if (client->isAuthenticated() && client->isConnected()) ++count;
+        return count;
+    }
+    unsigned long getRejectedClientCount() const { return rejectedClients; }
+    void shutdown();
 	/*! call in loop function*/
 	void update();
 	/*! publish message
@@ -46,7 +55,9 @@ private:
 
 	void findRetainTopic(sMQTTTopic *topic, sMQTTClient *client);
 
-	TCPServer *_server;
+	TCPServer *_server = nullptr;
+	size_t maxClients = 30;
+	unsigned long rejectedClients = 0;
 	sMQTTClientList clients;
 	sMQTTTopicList subscribes, retains;
 	bool isCheckWifiConnection;
