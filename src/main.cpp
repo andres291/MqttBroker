@@ -59,15 +59,18 @@ void setup()
       Serial.println(WiFi.localIP());
     }
     
+    ElegantOTA.begin(&server);  // OTA-Routen einmalig registrieren
+    ElegantOTA.setAutoReboot(true);
+
     // Webserver starten
     if (wifiMgr.isConnected()) {
       server.begin();
       serverStarted = true;
       Serial.println("Webserver gestartet");
+         Serial.print("Update-Seite: http://");
+         Serial.print(WiFi.localIP());
+         Serial.println("/update");
     }
- 
-    ElegantOTA.begin(&server);  // OTA aktivieren
-    ElegantOTA.setAutoReboot(true);
 
     const unsigned short mqttPort=1883;
     broker.init(mqttPort);
